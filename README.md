@@ -6,7 +6,7 @@ In the container directory are all the components you need to package the sample
 .
 |-- Dockerfile
 |-- build_and_push.sh
-`-- decision_trees
+`-- linear_svm
     |-- nginx.conf
     |-- predictor.py
     |-- serve
