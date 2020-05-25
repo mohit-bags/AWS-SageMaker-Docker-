@@ -1,0 +1,14 @@
+pandas
+numpy
+nltk==3.4.5
+matplotlib
+scikit-learn
+beautifulsoup4
+scipy
+flask
+gunicorn
+gevent
+lxml
+s3fs
+boto3
+botocore

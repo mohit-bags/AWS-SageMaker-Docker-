@@ -1,0 +1,165 @@
+#!/usr/bin/env python3.5
+
+# A sample training component that trains a simple scikit-learn decision tree model.
+# This implementation works in File mode and makes no assumptions about the input file names.
+# Input is specified as CSV with a data point in each row and the labels in the first column.
+
+from __future__ import print_function
+
+import os
+import json
+import pickle
+import sys
+import traceback
+import boto3
+import botocore
+from boto3.session import Session
+
+import numpy as np
+import pandas as pd
+import random
+import sys
+# linear algebra
+from scipy.stats import randint as randint2
+# data processing, CSV file I/O (e.g. pd.read_csv), data manipulation as in SQL
+# this is used for the plot the graph used for plot interactive graph.
+import matplotlib.pyplot as plt
+# to split the data into two parts
+
+import nltk
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.metrics import accuracy_score, confusion_matrix
+from nltk.corpus import stopwords
+import re
+from bs4 import BeautifulSoup
+from sklearn.metrics import classification_report
+from sklearn.linear_model import SGDClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.feature_extraction.text import TfidfTransformer
+
+# These are the paths to where SageMaker mounts interesting things in your container.
+
+prefix = '/opt/ml/'
+
+input_path = prefix + 'input/data'
+output_path = os.path.join(prefix, 'output')
+model_path = os.path.join(prefix, 'model')
+param_path = os.path.join(prefix, 'input/config/hyperparameters.json')
+
+# This algorithm has a single channel of input data called 'training'. Since we run in
+# File mode, the input files are copied to the directory specified here.
+channel_name = 'training'
+training_path = os.path.join(input_path, channel_name)
+
+nltk.download("stopwords")
+nltk.download("punkt")
+
+REPLACE_BY_SPACE_RE = re.compile('[/(){}\[\]\|@,;]')
+BAD_SYMBOLS_RE = re.compile('[^0-9a-z #+_]')
+STOPWORDS = set(stopwords.words('english'))
+
+
+def clean_text(text):
+    """
+        text: a string
+
+        return: modified initial string
+    """
+    text = BeautifulSoup(text, "lxml").text  # HTML decoding
+    # text = text.lower()  # lowercase text
+    # replace REPLACE_BY_SPACE_RE symbols by space in text
+    text = REPLACE_BY_SPACE_RE.sub(' ', text)
+    # delete symbols which are in BAD_SYMBOLS_RE from text
+    text = BAD_SYMBOLS_RE.sub('', text)
+    # delete stopwors from text
+    text = ' '.join(word for word in text.split() if word not in STOPWORDS)
+    return text
+
+
+# The function to execute the training.
+def train():
+    print('Starting the training.')
+    try:
+        # for taking input through s3 bucket
+        '''
+        # Take the set of files and read them all into a single pandas dataframe
+        bucket_name = '***'
+        key = '****'
+        access_key = '***'
+        secret_key = '***'
+
+        session = Session(aws_access_key_id=access_key,
+                          aws_secret_access_key=secret_key)
+        s3 = session.resource('s3')
+        print("Session created")
+        bucket = s3.Bucket(bucket_name)
+        print('bucket')
+
+        try:
+            s3.Bucket(bucket_name).download_file(key, 'data.csv')
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == "404":
+                print("The object does not exist.")
+            else:
+                raise
+        '''
+        input_file = os.path.join(training_path, 'data.csv')
+        if len(input_file) == 0:
+            raise ValueError(('There are no files in {}.\n' +
+                              'This usually indicates that the channel ({}) was incorrectly specified,\n' +
+                              'the data specification in S3 was incorrectly specified or the role specified\n' +
+                              'does not have permission to access the data.').format(training_path, channel_name))
+
+        df = pd.read_csv(input_file)
+
+        #df = pd.read_csv('data.csv')
+        df = df[pd.notnull(df['Intent'])]
+        print(df['ga:keyword'].apply(lambda x: len(x.split(' '))).sum())
+
+        my_intents = ['Informational', 'Navigational', 'Transactional']
+
+        df['ga:keyword'] = df['ga:keyword'].apply(clean_text)
+
+        df.rename(columns={'ga:keyword': 'keyword'}, inplace=True)
+        df['keyword'].apply(lambda x: len(x.split(' '))).sum()
+
+        # After text cleaning and removing stop words, we have only over 4000  keywords to work with!
+
+        X = df.keyword
+        y = df.Intent
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42)
+
+        clf = Pipeline([('vect', CountVectorizer()),
+                        ('tfidf', TfidfTransformer()),
+                        ('clf', SGDClassifier(loss='hinge', penalty='l2',
+                                              alpha=1e-3, random_state=42, max_iter=5, tol=None)), ])
+        clf.fit(X_train, y_train)
+
+        y_pred = clf.predict(X_test)
+
+        print('accuracy %s' % accuracy_score(y_pred, y_test))
+        print(classification_report(y_test, y_pred, target_names=my_intents))
+        # save the model
+        with open(os.path.join(model_path, 'keyword-intent-model.pkl'), 'wb') as out:
+            pickle.dump(clf, out, protocol=0)
+        print('Training complete.')
+    except Exception as e:
+        # Write out an error file. This will be returned as the failureReason in the
+        # DescribeTrainingJob result.
+        trc = traceback.format_exc()
+        with open(os.path.join(output_path, 'failure'), 'w') as s:
+            s.write('Exception during training: ' + str(e) + '\n' + trc)
+        # Printing this causes the exception to be in the training job logs, as well.
+        print('Exception during training: ' +
+              str(e) + '\n' + trc, file=sys.stderr)
+        # A non-zero exit code causes the training job to be marked as Failed.
+        sys.exit(255)
+
+
+if __name__ == '__main__':
+    train()
+
+    # A zero exit code causes the job to be marked a Succeeded.
+    sys.exit(0)
