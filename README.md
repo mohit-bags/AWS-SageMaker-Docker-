@@ -59,3 +59,9 @@ docker tag ${algorithm_name} ${fullname}
 # Pushing Docker image to ECR
 docker push ${fullname}
 
+# Running in Sagemaker and deploying endpoints to generate prediction
+Run runjob.py only for training the model
+OR
+Run runjob-withdeploy(with endpoints).py only for training the model and deploying the endpoints
+
+Now for generating predictions then run prediction.py where payload.csv is our input file
