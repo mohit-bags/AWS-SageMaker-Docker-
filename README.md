@@ -65,3 +65,5 @@ OR
 Run runjob-withdeploy(with endpoints).py only for training the model and deploying the endpoints
 
 Now for generating predictions then run prediction.py where payload.csv is our input file
+
+![Docker Image built and tested model by running Image locally](https://github.com/mohit-bags/AWS-SageMaker-Docker-/blob/master/Succesful%20Training%20Job(Locally).png)
