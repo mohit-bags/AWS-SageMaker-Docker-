@@ -1,6 +1,6 @@
 pandas
 numpy
-nltk==3.4.5
+nltk==3.9
 matplotlib
 scikit-learn
 beautifulsoup4
